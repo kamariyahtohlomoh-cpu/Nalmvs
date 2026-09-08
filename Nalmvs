@@ -1,0 +1,79 @@
+-- Script Name: nalmvs
+-- Description: ระบบล็อกกล้องติดตามเป้าหมาย (Camera Lock-On / Aimbot Camera)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local isLocked = false
+local currentTarget = nil
+local lockKey = Enum.KeyCode.E -- ปุ่มสำหรับเปิด/ปิดการล็อกกล้อง (เปลี่ยนได้ตามต้องการ)
+
+-- ฟังก์ชันค้นหาผู้เล่นฝ่ายตรงข้ามที่อยู่ใกล้จุดศูนย์กลางหน้าจอมากที่สุด
+local function getClosestPlayerToCursor()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    local mousePosition = UserInputService:GetMouseLocation()
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+            local targetHRP = player.Character.HumanoidRootPart
+            local screenPos, onScreen = Camera:WorldToViewportPoint(targetHRP.Position)
+
+            if onScreen then
+                local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePosition).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+-- ฟังก์ชันหลัก nalmvs: เปิด/ปิด การล็อกเป้าหมาย
+local function nalmvs()
+    if isLocked then
+        isLocked = false
+        currentTarget = nil
+    else
+        currentTarget = getClosestPlayerToCursor()
+        if currentTarget then
+            isLocked = true
+        end
+    end
+end
+
+-- กดปุ่ม (กด E) เพื่อเปิดหรือปิดใช้งานสคริปต์
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == lockKey then
+        nalmvs()
+    end
+end)
+
+-- ปรับมุมกล้องให้หันไปหาเป้าหมายตลอดเวลาขณะล็อก
+RunService.RenderStepped:Connect(function()
+    if isLocked and currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
+        local targetHRP = currentTarget.Character.HumanoidRootPart
+        local targetHumanoid = currentTarget.Character:FindFirstChildOfClass("Humanoid")
+        
+        -- ยกเลิกล็อกทันทีถ้าเป้าหมายตาย
+        if not targetHumanoid or targetHumanoid.Health <= 0 then
+            isLocked = false
+            currentTarget = nil
+            return
+        end
+
+        -- หันมุมกล้องไปยังตำแหน่งเป้าหมาย
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetHRP.Position)
+    else
+        isLocked = false
+    end
+end)
